@@ -8,6 +8,9 @@ import { AuthProvider } from './auth.jsx';
 import Home from './pages/Home.jsx';
 import Properties from './pages/Properties.jsx';
 import Account from './pages/Account.jsx';
+import QuickPay from './pages/QuickPay.jsx';
+import Receipt from './pages/Receipt.jsx';
+import { Privacy, Refund, Terms } from './pages/Legal.jsx';
 import { api } from './api';
 import PropertyDetails from './pages/PropertyDetails.jsx';
 import Admin, { AdminLogin } from './pages/Admin.jsx';
@@ -45,6 +48,11 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/properties" element={<Properties />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/quick" element={<QuickPay />} />
+        <Route path="/receipt/:token" element={<Receipt />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/refund-policy" element={<Refund />} />
         <Route path="/property/:id" element={<PropertyDetails />} />
         <Route path="/admin" element={<AdminGate />} />
         <Route path="*" element={<><Header /><div className="not-found"><h1>That story isn’t here.</h1><Link className="button button-dark" to="/">Back to home <ArrowRight size={16} /></Link></div><Footer /></>} />

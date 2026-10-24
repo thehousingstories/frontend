@@ -112,6 +112,7 @@ function AuthModal({ initialMode, onClose, onAuthed }) {
             <div className="otp-icon"><ShieldCheck size={30} /></div>
             <h2>Check your email</h2>
             <p className="auth-sub">We sent a 6-digit code to<br /><b>{f.email}</b></p>
+            <p className="auth-sub">Didn't receive the code? Please check your Spam folder.</p>
             <form onSubmit={verify} className="auth-form">
               <input ref={codeRef} className="otp-input" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" maxLength={6} aria-label="6-digit code" />
               {err && <p className="form-error" role="alert">{err}</p>}

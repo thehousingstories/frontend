@@ -31,7 +31,7 @@ export const fmtDate = (d, withYear = true) =>
 export const shortId = (id) => String(id || '').slice(-6).toUpperCase();
 
 // WhatsApp message sent to the business with every detail of the visit
-export function buildWhatsAppMessage({ property, customer, date, time, bookingId, note }) {
+export function buildWhatsAppMessage({ property, customer, date, time, bookingId, note, plan }) {
   const isRent = property.listingType !== 'Sale';
   const lines = [
     'Hello The Housing Stories! 👋',
@@ -49,8 +49,68 @@ export function buildWhatsAppMessage({ property, customer, date, time, bookingId
     `📞 Mobile: ${customer.phone}`,
     `✉️ Email: ${customer.email}`,
   ];
+  if (plan) lines.push(`💳 Plan: ${plan}`);
   if (bookingId) lines.push(`🧾 Booking ID: ${shortId(bookingId)}`);
   if (note) lines.push(`📝 Note: ${note}`);
   return lines.join('\n');
 }
 export const whatsappLink = (number, message) => `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+
+// Short label for a booking's plan (used in WhatsApp messages and the account page)
+export const planLabel = (b) => (b?.plan === 'single' ? `Single visit (${money(b.amountPaid)} paid)` : 'Unlimited visit pass');
+
+// WhatsApp message for the one-page quick payment
+export function buildQuickMessage({ name, phone, amount, paymentId, ref, paidAt, token }) {
+  return [
+    'Hello The Housing Stories! 👋',
+    `I have paid ${money(amount)}.`,
+    '',
+    `👤 Name: ${name}`,
+    `📞 Mobile: ${phone}`,
+    `💳 Payment ID: ${paymentId}`,
+    `🧾 Ref: ${ref}`,
+    `📅 Paid on: ${new Date(paidAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+    '',
+    ...(token ? [`🔗 Receipt: ${window.location.origin}/receipt/${token}`] : []),
+  ].join('\n');
+}
+
+// Draws a payment receipt image in the browser (no libraries) so the customer can attach it in WhatsApp
+export async function makeReceiptBlob({ name, phone, amount, paymentId, ref, paidAt }) {
+  try { await document.fonts?.ready; } catch { /* ignore */ }
+  const W = 720, H = 960;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  const sans = "'DM Sans', Arial, sans-serif", serif = "'Playfair Display', Georgia, serif";
+  const rr = (px, py, w, h, r) => { x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r); x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); };
+  const fit = (text, maxW, size, weight) => { let s = size; x.font = `${weight} ${s}px ${sans}`; while (x.measureText(text).width > maxW && s > 12) { s -= 1; x.font = `${weight} ${s}px ${sans}`; } return text; };
+
+  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#0a3d44'); g.addColorStop(1, '#0f766e');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#fffaf2'; rr(40, 50, W - 80, H - 100, 36); x.fill();
+
+  x.textAlign = 'center';
+  x.fillStyle = '#0f766e'; x.font = `700 22px ${sans}`; x.fillText('THE HOUSING STORIES', W / 2, 120);
+  x.fillStyle = '#5d727a'; x.font = `600 15px ${sans}`; x.fillText('PAYMENT RECEIPT', W / 2, 150);
+
+  x.fillStyle = '#e6f6f3'; x.beginPath(); x.arc(W / 2, 235, 50, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = '#0f766e'; x.lineWidth = 9; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.beginPath(); x.moveTo(W / 2 - 22, 236); x.lineTo(W / 2 - 6, 253); x.lineTo(W / 2 + 25, 218); x.stroke();
+
+  x.fillStyle = '#0a3d44'; x.font = `600 84px ${serif}`; x.fillText(money(amount), W / 2, 385);
+  x.fillStyle = '#0f766e'; x.font = `700 20px ${sans}`; x.fillText('PAID SUCCESSFULLY', W / 2, 428);
+
+  x.strokeStyle = '#eadfce'; x.lineWidth = 2; x.setLineDash([8, 8]);
+  x.beginPath(); x.moveTo(90, 470); x.lineTo(W - 90, 470); x.stroke(); x.setLineDash([]);
+
+  const when = new Date(paidAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  [['Name', name], ['Mobile', phone], ['Payment ID', paymentId], ['Reference', ref], ['Date', when]].forEach(([k, v], i) => {
+    const y = 535 + i * 72;
+    x.textAlign = 'left'; x.fillStyle = '#5d727a'; x.font = `600 18px ${sans}`; x.fillText(k, 90, y);
+    x.textAlign = 'right'; x.fillStyle = '#0d2b33'; fit(String(v || '-'), 380, 22, 700); x.fillText(String(v || '-'), W - 90, y);
+  });
+
+  x.textAlign = 'center'; x.fillStyle = '#5d727a'; x.font = `500 16px ${sans}`;
+  x.fillText('Property visit charge · thehousingstories.in', W / 2, 890);
+  return new Promise((resolve) => c.toBlob(resolve, 'image/png'));
+}

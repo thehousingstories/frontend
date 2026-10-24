@@ -6,7 +6,7 @@ import { useAuth } from '../auth.jsx';
 import { Footer, Header } from '../components/Layout';
 import { PropertyImage } from '../components/PropertyCard';
 import { useToast } from '../hooks.jsx';
-import { buildWhatsAppMessage, fmtDate, money, shortId, whatsappLink } from '../utils';
+import { buildWhatsAppMessage, fmtDate, money, planLabel, shortId, whatsappLink } from '../utils';
 
 const FILTERS = ['All', 'Upcoming', 'Completed', 'Cancelled'];
 const todayUTC = () => new Date(new Date().toISOString().slice(0, 10));
@@ -15,7 +15,8 @@ export default function Account() {
   const { customer, ready, openAuth, logout, setCustomer } = useAuth();
   const toast = useToast();
   const [bookings, setBookings] = useState(null);
-  const [cfg, setCfg] = useState({ whatsapp: '', phone: '', fee: 299 });
+  const [payments, setPayments] = useState(null);
+  const [cfg, setCfg] = useState({ whatsapp: '', phone: '', fee: 299, singleFee: 149 });
   const [filter, setFilter] = useState('All');
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '' });
@@ -23,7 +24,10 @@ export default function Account() {
 
   useEffect(() => { api('/config').then(setCfg).catch(() => {}); }, []);
   const load = () => api('/account/bookings', { as: 'customer' }).then(setBookings).catch((e) => { setBookings([]); toast(e.message, 'error'); });
-  useEffect(() => { if (customer) load(); else setBookings(null); }, [customer?.id]); // eslint-disable-line
+  useEffect(() => {
+    if (customer) { load(); api('/account/payments', { as: 'customer' }).then(setPayments).catch(() => setPayments([])); }
+    else { setBookings(null); setPayments(null); }
+  }, [customer?.id, customer?.schedulingPaid]); // eslint-disable-line
 
   const isUpcoming = (b) => ['Requested', 'Confirmed'].includes(b.bookingStatus) && new Date(b.preferredDate) >= todayUTC();
   const shown = useMemo(() => (bookings || []).filter((b) => {
@@ -44,7 +48,7 @@ export default function Account() {
     try { await api(`/account/bookings/${b._id}/cancel`, { method: 'PATCH', as: 'customer' }); toast('Visit cancelled'); load(); }
     catch (e) { toast(e.message, 'error'); }
   }
-  const waLink = (b) => whatsappLink(cfg.whatsapp, buildWhatsAppMessage({ property: b.property, customer, date: b.preferredDate, time: b.preferredTime, bookingId: b._id, note: b.note }));
+  const waLink = (b) => whatsappLink(cfg.whatsapp, buildWhatsAppMessage({ property: b.property, customer, date: b.preferredDate, time: b.preferredTime, bookingId: b._id, note: b.note, plan: planLabel(b) }));
 
   if (!ready) return (<><Header /><main className="account-page"><div className="sk sk-card" /></main><Footer /></>);
   if (!customer) return (
@@ -95,8 +99,20 @@ export default function Account() {
                   <p className="muted small">Your pass covers every property. You’ll never pay this again.</p>
                 </>
               ) : (
-                <><p className="muted">Pay {money(cfg.fee)} once when you schedule your first visit. After that, every visit is free.</p><Link to="/properties" className="button button-accent full">Browse properties</Link></>
+                <><p className="muted">Get unlimited visits for {money(cfg.fee)} (one-time), or pay {money(cfg.singleFee)} per property visit.</p><Link to="/#how" className="button button-accent full">See plans</Link></>
               )}
+            </div>
+            <div className="panel">
+              <div className="panel-top"><h3>Payments</h3></div>
+              {payments === null ? <div className="sk" style={{ height: 60 }} />
+                : payments.length === 0 ? <p className="muted">No payments yet.</p>
+                : payments.map((x) => (
+                  <div className="pay-row" key={x._id}>
+                    <div><b>{x.type === 'pass' ? 'Unlimited visit pass' : `Single visit${x.booking?.property?.title ? ` — ${x.booking.property.title}` : ''}`}</b>
+                      <small>{new Date(x.paidAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · <span className="mono">{x.paymentId}</span></small></div>
+                    <strong>{money(x.amount)}</strong>
+                  </div>
+                ))}
             </div>
           </aside>
 
@@ -118,6 +134,7 @@ export default function Account() {
                     </div>
                     {b.property && <p className="visit-loc"><MapPin size={14} /> {b.property.locality}, {b.property.city}</p>}
                     <p className="visit-when"><CalendarDays size={15} /> {fmtDate(b.preferredDate)} · <b>{b.preferredTime}</b> <small>· ID {shortId(b._id)}</small></p>
+                    <p className="visit-plan"><CreditCard size={14} /> {planLabel(b)}</p>
                     <div className="visit-actions">
                       {isUpcoming(b) && b.paymentStatus === 'Paid' && b.property && cfg.whatsapp && <a className="button button-whatsapp small" href={waLink(b)} target="_blank" rel="noreferrer"><MessageCircle size={16} /> WhatsApp</a>}
                       {isUpcoming(b) && b.paymentStatus === 'Paid' && cfg.phone && <a className="button button-outline small" href={`tel:${cfg.phone}`}><Phone size={15} /> Call</a>}

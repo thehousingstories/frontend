@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ClipboardList, Eye, EyeOff, House, ImagePlus, LayoutDashboard, Loader2, LogOut, MessageSquareQuote, Pencil, Plus, Trash2, Users, Wallet, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Building2, CalendarDays, CheckCircle2, ClipboardList, Eye, EyeOff, House, ImagePlus, LayoutDashboard, Loader2, Film, LogOut, MessageSquareQuote, Pencil, Plus, Trash2, Users, Wallet, X, Zap } from 'lucide-react';
 import { api, clearToken } from '../api';
 import { PropertyImage } from '../components/PropertyCard';
 import { useToast } from '../hooks';
 import { PROPERTY_TYPES, money } from '../utils';
 
+const emptyReel = { title: '', caption: '', source: 'upload', videoUrl: '', posterUrl: '', instagramUrl: '', property: '', sortOrder: 0, isPublished: true };
+
 const emptyForm = {
   title: '', description: '', propertyType: 'Apartment', listingType: 'Rent', rent: '', deposit: '', bedrooms: 2, bathrooms: 1,
-  areaSqFt: '', furnishing: 'Semi-furnished', address: '', locality: '', city: 'Bengaluru', images: [], instagramReelUrl: '',
+  furnishing: 'Semi-furnished', address: '', locality: '', city: 'Bengaluru', images: [], instagramReelUrl: '',
   amenities: '', featured: false, status: 'Available', isPublished: true,
 };
 
@@ -44,6 +46,13 @@ export default function Admin({ onLogout }) {
   const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [testimonials, setTestimonials] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [quick, setQuick] = useState([]);
+  const [reels, setReels] = useState([]);
+  const [reelForm, setReelForm] = useState(emptyReel);
+  const [reelUploading, setReelUploading] = useState(false);
+  const [reelSaving, setReelSaving] = useState(false);
+  const videoRef = useRef(null);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [urlInput, setUrlInput] = useState('');
@@ -53,8 +62,8 @@ export default function Admin({ onLogout }) {
 
   async function load() {
     try {
-      const [p, b, c, t] = await Promise.all([api('/properties/admin/all'), api('/bookings/admin/all'), api('/bookings/admin/customers'), api('/testimonials/admin/all')]);
-      setProperties(p); setBookings(b); setCustomers(c); setTestimonials(t);
+      const [p, b, c, t, pay, r, q] = await Promise.all([api('/properties/admin/all'), api('/bookings/admin/all'), api('/bookings/admin/customers'), api('/testimonials/admin/all'), api('/bookings/admin/payments'), api('/reels/admin/all'), api('/quick/admin/all')]);
+      setProperties(p); setBookings(b); setCustomers(c); setTestimonials(t); setPayments(pay); setReels(r); setQuick(q);
     } catch (e) { toast(e.message, 'error'); }
   }
   useEffect(() => { load(); }, []); // eslint-disable-line
@@ -91,7 +100,7 @@ export default function Admin({ onLogout }) {
     e.preventDefault(); setSaving(true);
     const { _id, __v, createdAt, updatedAt, slug, ...rest } = form;
     const payload = {
-      ...rest, rent: Number(form.rent), deposit: Number(form.deposit || 0), bedrooms: Number(form.bedrooms || 0), bathrooms: Number(form.bathrooms || 0), areaSqFt: Number(form.areaSqFt || 0),
+      ...rest, rent: Number(form.rent), deposit: Number(form.deposit || 0), bedrooms: Number(form.bedrooms || 0), bathrooms: Number(form.bathrooms || 0),
       amenities: String(form.amenities).split(',').map((s) => s.trim()).filter(Boolean),
     };
     try {
@@ -118,15 +127,46 @@ export default function Admin({ onLogout }) {
     try { await api(`/bookings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ bookingStatus }) }); toast('Status updated'); load(); } catch (e) { toast(e.message, 'error'); }
   }
 
+  async function toggleHandled(x) {
+    try { await api(`/quick/admin/${x._id}/handled`, { method: 'PATCH', body: JSON.stringify({ handled: !x.handled }) }); load(); } catch (e) { toast(e.message, 'error'); }
+  }
+  const waNumber = (phone) => { const d = String(phone).replace(/\D/g, ''); return d.length === 10 ? `91${d}` : d; };
+
+  async function uploadVideo(file) {
+    if (!file) return;
+    setReelUploading(true);
+    try {
+      const fd = new FormData(); fd.append('video', file);
+      const d = await api('/uploads/video', { method: 'POST', body: fd });
+      setReelForm((f) => ({ ...f, videoUrl: d.url, posterUrl: d.poster }));
+      toast('Video uploaded');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { setReelUploading(false); if (videoRef.current) videoRef.current.value = ''; }
+  }
+  async function saveReel(e) {
+    e.preventDefault(); setReelSaving(true);
+    try { await api('/reels', { method: 'POST', body: JSON.stringify(reelForm) }); toast('Reel published'); setReelForm(emptyReel); load(); }
+    catch (ex) { toast(ex.message, 'error'); } finally { setReelSaving(false); }
+  }
+  async function toggleReel(r) {
+    try { await api(`/reels/${r._id}`, { method: 'PUT', body: JSON.stringify({ isPublished: !r.isPublished }) }); load(); } catch (e) { toast(e.message, 'error'); }
+  }
+  async function delReel(id) {
+    if (!confirm('Delete this reel?')) return;
+    try { await api(`/reels/${id}`, { method: 'DELETE' }); toast('Reel deleted'); load(); } catch (e) { toast(e.message, 'error'); }
+  }
+
   const stats = useMemo(() => ({
     active: properties.filter((p) => p.status === 'Available' && p.isPublished).length,
     visits: bookings.length,
     upcoming: bookings.filter((b) => ['Requested', 'Confirmed'].includes(b.bookingStatus) && new Date(b.preferredDate) >= new Date(new Date().toDateString())).length,
     payers: customers.filter((c) => c.schedulingPaid).length,
-    revenue: customers.reduce((s, c) => s + (c.amountPaid || 0), 0),
-  }), [properties, bookings, customers]);
+    revenue: payments.reduce((s, x) => s + (x.amount || 0), 0),
+    quickCount: quick.length,
+    quickRevenue: quick.reduce((s, x) => s + (x.amount || 0), 0),
+  }), [properties, bookings, customers, payments, quick]);
   const shownBookings = bookings.filter((b) => bookingFilter === 'All' || b.bookingStatus === bookingFilter);
-  const navItems = [['overview', 'Overview', LayoutDashboard], ['properties', 'Properties', Building2], ['bookings', 'Visits', ClipboardList], ['customers', 'Customers', Users], ['testimonials', 'Stories', MessageSquareQuote]];
+  const navItems = [['overview', 'Overview', LayoutDashboard], ['properties', 'Properties', Building2], ['bookings', 'Visits', ClipboardList], ['customers', 'Customers', Users], ['quick', 'Quick pay', Zap], ['reels', 'Reels', Film], ['testimonials', 'Stories', MessageSquareQuote]];
 
   return (
     <div className="admin-shell">
@@ -151,7 +191,9 @@ export default function Admin({ onLogout }) {
               <div className="stat-card"><span>Live listings</span><Building2 /><strong>{stats.active}</strong><small>Published &amp; available</small></div>
               <div className="stat-card"><span>Upcoming visits</span><CalendarDays /><strong>{stats.upcoming}</strong><small>{stats.visits} total requests</small></div>
               <div className="stat-card"><span>Pass holders</span><CheckCircle2 /><strong>{stats.payers}</strong><small>Paid the one-time fee</small></div>
-              <div className="stat-card"><span>Fees collected</span><Wallet /><strong>{money(stats.revenue)}</strong><small>One-time scheduling fees</small></div>
+              <div className="stat-card"><span>Fees collected</span><Wallet /><strong>{money(stats.revenue)}</strong><small>Passes and single visits</small></div>
+              <div className="stat-card"><span>Property Visit Charge</span><Zap /><strong>{stats.quickCount}</strong><small>Paid on the /visit-charge</small></div>
+              <div className="stat-card"><span>Quick pay revenue</span><Wallet /><strong>{money(stats.quickRevenue)}</strong><small>Tracked separately</small></div>
             </div>
             <section className="admin-panel"><div className="panel-heading"><div><h3>Recent properties</h3><p>Your latest inventory updates</p></div><button className="text-link" onClick={() => setTab('properties')}>Manage all <ArrowRight size={15} /></button></div>
               {properties.slice(0, 5).map((p) => (<div className="admin-list-row" key={p._id}><PropertyImage className="row-img" src={p.images?.[0]} alt="" /><div className="admin-row-title"><b>{p.title}</b><small>{p.locality} · {money(p.rent)}{p.listingType === 'Rent' ? '/month' : ''}</small></div><span className={`status-pill ${p.status === 'Available' ? 'green' : ''}`}>{p.status}</span><button className="icon-btn" onClick={() => edit(p)} aria-label="Edit"><Pencil size={16} /></button></div>))}
@@ -172,7 +214,6 @@ export default function Admin({ onLogout }) {
                 <label>Security deposit (₹)<input type="number" min="0" value={form.deposit} onChange={set('deposit')} /></label>
                 <label>Bedrooms<input type="number" min="0" value={form.bedrooms} onChange={set('bedrooms')} /></label>
                 <label>Bathrooms<input type="number" min="0" value={form.bathrooms} onChange={set('bathrooms')} /></label>
-                <label>Area (sq. ft.)<input type="number" min="0" value={form.areaSqFt} onChange={set('areaSqFt')} /></label>
                 <label>Furnishing<select value={form.furnishing} onChange={set('furnishing')}>{['Furnished', 'Semi-furnished', 'Unfurnished'].map((x) => <option key={x}>{x}</option>)}</select></label>
                 <label className="wide">Full address<input required value={form.address} onChange={set('address')} /></label>
                 <label className="wide">Description<textarea required rows="4" value={form.description} onChange={set('description')} /></label>
@@ -209,8 +250,8 @@ export default function Admin({ onLogout }) {
           {tab === 'bookings' && (
             <section className="admin-panel"><div className="panel-heading"><div><h3>Property visit requests</h3><p>Scheduled visits across all customers.</p></div>
               <select className="mini-select" value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}>{['All', 'Requested', 'Confirmed', 'Completed', 'Cancelled'].map((x) => <option key={x}>{x}</option>)}</select></div>
-              <div className="table-scroll"><table><thead><tr><th>Customer</th><th>Property</th><th>Visit</th><th>Pass</th><th>Status</th></tr></thead><tbody>
-                {shownBookings.map((b) => (<tr key={b._id}><td><b>{b.customerName}</b><small>{b.customerEmail}<br />{b.customerPhone}</small></td><td>{b.property?.title || 'Property removed'}{b.note && <small>“{b.note}”</small>}</td><td>{new Date(b.preferredDate).toLocaleDateString('en-IN')}<small>{b.preferredTime}</small></td><td><span className={`status-pill ${b.paymentStatus === 'Paid' ? 'green' : ''}`}>{b.paymentStatus === 'Paid' ? 'Active' : b.paymentStatus}</span></td>
+              <div className="table-scroll"><table><thead><tr><th>Customer</th><th>Property</th><th>Visit</th><th>Payment</th><th>Status</th></tr></thead><tbody>
+                {shownBookings.map((b) => (<tr key={b._id}><td><b>{b.customerName}</b><small>{b.customerEmail}<br />{b.customerPhone}</small></td><td>{b.property?.title || 'Property removed'}{b.note && <small>“{b.note}”</small>}</td><td>{new Date(b.preferredDate).toLocaleDateString('en-IN')}<small>{b.preferredTime}</small></td><td><span className={`status-pill ${b.paymentStatus === 'Paid' ? 'green' : ''}`}>{b.paymentStatus === 'Paid' ? (b.plan === 'single' ? `Single ${money(b.amountPaid)}` : 'Pass') : b.paymentStatus}</span></td>
                   <td><select value={b.bookingStatus} onChange={(e) => setStatus(b._id, e.target.value)}>{['Requested', 'Confirmed', 'Completed', 'Cancelled'].map((x) => <option key={x}>{x}</option>)}</select></td></tr>))}
               </tbody></table>{!shownBookings.length && <p className="muted pad">No visit requests yet.</p>}</div></section>
           )}
@@ -221,6 +262,55 @@ export default function Admin({ onLogout }) {
                 {customers.map((c) => (<tr key={c._id}><td><b>{c.name}</b></td><td>{c.email}<small>{c.phone}</small></td><td><span className={`status-pill ${c.schedulingPaid ? 'green' : ''}`}>{c.schedulingPaid ? `Paid ${money(c.amountPaid)}` : 'Not paid'}</span>{c.paidAt && <small>{new Date(c.paidAt).toLocaleDateString('en-IN')}</small>}</td><td>{bookings.filter((b) => (b.customer?._id || b.customer) === c._id).length}</td></tr>))}
               </tbody></table>{!customers.length && <p className="muted pad">No customers yet.</p>}</div></section>
           )}
+
+          {tab === 'quick' && (
+            <section className="admin-panel"><div className="panel-heading"><div><h3>Quick payments</h3><p>{stats.quickCount} payments · {money(stats.quickRevenue)} collected from the /quick page</p></div></div>
+              <div className="table-scroll"><table><thead><tr><th>Date</th><th>Name</th><th>Mobile</th><th>Payment ID</th><th>Amount</th><th>Followed up</th></tr></thead><tbody>
+                {quick.map((x) => (<tr key={x._id}>
+                  <td>{new Date(x.paidAt).toLocaleDateString('en-IN')}<small>{new Date(x.paidAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</small></td>
+                  <td><b>{x.name}</b></td>
+                  <td><a href={`tel:${x.phone}`}>{x.phone}</a><small><a href={`https://wa.me/${waNumber(x.phone)}`} target="_blank" rel="noreferrer">Message on WhatsApp</a></small></td>
+                  <td><small className="mono">{x.paymentId}</small>{x.token && <small><a href={`/receipt/${x.token}`} target="_blank" rel="noreferrer">View receipt</a></small>}</td>
+                  <td><b>{money(x.amount)}</b></td>
+                  <td><label className="check-label"><input type="checkbox" checked={!!x.handled} onChange={() => toggleHandled(x)} /> {x.handled ? 'Done' : 'Pending'}</label></td>
+                </tr>))}
+              </tbody></table>{!quick.length && <p className="muted pad">No quick payments yet. Share your /quick page link to start collecting.</p>}</div></section>
+          )}
+
+          {tab === 'reels' && (<>
+            <form className="panel admin-form" onSubmit={saveReel}>
+              <h3>Add a reel</h3>
+              <div className="form-grid">
+                <label>Title<input required value={reelForm.title} onChange={(e) => setReelForm({ ...reelForm, title: e.target.value })} placeholder="2BHK tour in HSR" /></label>
+                <label>Source<select value={reelForm.source} onChange={(e) => setReelForm({ ...reelForm, source: e.target.value })}><option value="upload">Upload a video (plays on the website)</option><option value="instagram">Instagram reel link</option></select></label>
+                {reelForm.source === 'upload' ? (
+                  <div className="wide image-manager">
+                    <span className="field-label">Video <small>(MP4/MOV/WEBM up to 60 MB; vertical 9:16 looks best)</small></span>
+                    {reelForm.videoUrl && <video className="admin-video" src={reelForm.videoUrl} poster={reelForm.posterUrl || undefined} controls />}
+                    <div className="image-actions">
+                      <input ref={videoRef} type="file" accept="video/*" hidden onChange={(e) => uploadVideo(e.target.files?.[0])} />
+                      <button type="button" className="button button-outline" onClick={() => videoRef.current?.click()} disabled={reelUploading}>{reelUploading ? <><Loader2 size={16} className="spin" /> Uploading…</> : <><ImagePlus size={16} /> Upload video</>}</button>
+                      <div className="url-add"><input value={reelForm.videoUrl} onChange={(e) => setReelForm({ ...reelForm, videoUrl: e.target.value })} placeholder="…or paste a direct video link (.mp4)" /></div>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="wide">Instagram reel link<input value={reelForm.instagramUrl} onChange={(e) => setReelForm({ ...reelForm, instagramUrl: e.target.value })} placeholder="https://www.instagram.com/reel/XXXX/" /></label>
+                )}
+                <label className="wide">Caption (optional)<input value={reelForm.caption} onChange={(e) => setReelForm({ ...reelForm, caption: e.target.value })} /></label>
+                <label>Linked property (optional)<select value={reelForm.property} onChange={(e) => setReelForm({ ...reelForm, property: e.target.value })}><option value="">None</option>{properties.map((p) => <option key={p._id} value={p._id}>{p.title}</option>)}</select></label>
+                <label>Order (higher shows first)<input type="number" value={reelForm.sortOrder} onChange={(e) => setReelForm({ ...reelForm, sortOrder: e.target.value })} /></label>
+              </div>
+              <button className="button button-dark" disabled={reelSaving || reelUploading}>{reelSaving ? <><Loader2 size={16} className="spin" /> Saving…</> : <>Publish reel <ArrowRight size={16} /></>}</button>
+            </form>
+            <section className="admin-panel"><div className="panel-heading"><div><h3>All reels</h3><p>{reels.length} reels · shown in the Reels section of the home page</p></div></div>
+              {reels.map((r) => (<div className="admin-list-row" key={r._id}>
+                {r.posterUrl ? <img className="row-img" src={r.posterUrl} alt="" /> : <span className="row-img reel-ph"><Film size={18} /></span>}
+                <div className="admin-row-title"><b>{r.title}</b><small>{r.source === 'instagram' ? 'Instagram' : 'Uploaded video'}{r.property?.title ? ` · ${r.property.title}` : ''}{!r.isPublished ? ' · Hidden' : ''}</small></div>
+                <button className="icon-btn" onClick={() => toggleReel(r)} aria-label={r.isPublished ? 'Hide' : 'Publish'}>{r.isPublished ? <Eye size={16} /> : <EyeOff size={16} />}</button>
+                <button className="icon-btn danger" onClick={() => delReel(r._id)} aria-label="Delete"><Trash2 size={16} /></button></div>))}
+              {!reels.length && <p className="muted pad">No reels yet. Add your first one above.</p>}
+            </section>
+          </>)}
 
           {tab === 'testimonials' && (<>
             <form className="panel testimonial-form" onSubmit={saveTestimonial}><h3>Add a customer story</h3>

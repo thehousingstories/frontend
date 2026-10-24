@@ -5,7 +5,7 @@ import { Footer, Header } from '../components/Layout';
 import PropertyCard, { PropertySkeletons } from '../components/PropertyCard';
 import { Reveal, useProperties } from '../hooks';
 import { PROPERTY_TYPES } from '../utils';
-
+import SEO from '../components/SEO';
 const BUDGETS = [['', 'Any budget'], ['15000', 'Up to ₹15,000'], ['30000', 'Up to ₹30,000'], ['50000', 'Up to ₹50,000'], ['100000', 'Up to ₹1,00,000'], ['10000000', 'Up to ₹1 Cr']];
 
 export default function Properties() {
@@ -34,6 +34,12 @@ export default function Properties() {
 
   return (
     <>
+
+      <SEO
+        title="Properties for Rent and Sale in Bangalore"
+        description="Browse available flats, apartments, houses and other properties in Bangalore. Filter by locality, property type and budget."
+        path="/properties"
+      />
       <Header />
       <main className="section listing-page">
         <Reveal className="section-heading">

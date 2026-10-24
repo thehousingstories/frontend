@@ -14,7 +14,7 @@ export default function PropertyCard({ p, index = 0 }) {
   const isRent = p.listingType !== 'Sale';
   return (
     <article className="property-card" style={{ '--i': index }}>
-      <Link className="property-image" to={`/property/${p._id}`}>
+      <Link className="property-image" to={`/property/${p.slug || p._id}`}>
         <PropertyImage src={p.images?.[0]} alt={p.title} />
         <span className="image-tag">{p.propertyType || 'Home'}</span>
         <span className={`listing-tag ${isRent ? 'rent' : 'sale'}`}>{isRent ? 'For rent' : 'For sale'}</span>
@@ -26,18 +26,18 @@ export default function PropertyCard({ p, index = 0 }) {
       </Link>
       <div className="property-body">
         <div className="property-location"><MapPin size={14} />{p.locality}, {p.city || 'Bengaluru'}</div>
-        <Link to={`/property/${p._id}`} className="property-title">{p.title}</Link>
+        <Link to={`/property/${p.slug || p._id}`} className="property-title">{p.title}</Link>
         <div className="property-specs">
           <span><BedDouble size={16} />{p.bedrooms ?? 0} beds</span>
           <span><Bath size={16} />{p.bathrooms ?? 0} baths</span>
-          {p.areaSqFt ? <span><Ruler size={16} />{p.areaSqFt} sq.ft</span> : null}
+          {/* {p.areaSqFt ? <span><Ruler size={16} />{p.areaSqFt} sq.ft</span> : null} */}
         </div>
         <div className="property-foot">
           <div>
             <strong>{money(p.rent)}{isRent && <small>/month</small>}</strong>
             {isRent && p.deposit ? <small>Deposit {money(p.deposit)}</small> : <small>{p.furnishing}</small>}
           </div>
-          <Link to={`/property/${p._id}`} className="round-arrow" aria-label={`View ${p.title}`}><ArrowUpRight size={19} /></Link>
+          <Link to={`/property/${p.slug || p._id}`}className="round-arrow" aria-label={`View ${p.title}`}><ArrowUpRight size={19} /></Link>
         </div>
       </div>
     </article>

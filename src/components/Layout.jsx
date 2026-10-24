@@ -38,18 +38,19 @@ export function Header() {
       </button>
       <nav className={open ? 'nav-links open' : 'nav-links'}>
         <Link to="/properties" onClick={() => setOpen(false)}>All properties</Link>
-        <Link to="/#how" onClick={() => setOpen(false)}>Visit plan</Link>
+        <Link to="/#reels" onClick={() => setOpen(false)}>Reels</Link>
+        <Link to="/#how" onClick={() => setOpen(false)}>Pricing</Link>
         <Link to="/#story" onClick={() => setOpen(false)}>Our story</Link>
         <Link to="/#testimonials" onClick={() => setOpen(false)}>Stories</Link>
         {customer ? (
           <>
             <Link className="nav-account" to="/account" onClick={() => setOpen(false)}><span className="avatar">{customer.name?.[0]?.toUpperCase() || 'U'}</span>My account</Link>
-            <button className="nav-logout" onClick={() => { logout(); setOpen(false); }}><LogOut size={16} /> Log out</button>
+            {/* <button className="nav-logout" onClick={() => { logout(); setOpen(false); }}><LogOut size={16} /> Log out</button> */}
           </>
         ) : (
           <button className="nav-login" onClick={() => { setOpen(false); openAuth({ mode: 'login' }); }}>Log in / Sign up</button>
         )}
-        <Link className="nav-cta" to="/#contact" onClick={() => setOpen(false)}>Talk to us <ArrowUpRight size={16} /></Link>
+        {/* <Link className="nav-cta" to="/#contact" onClick={() => setOpen(false)}>Talk to us <ArrowUpRight size={16} /></Link> */}
       </nav>
     </header>
   );
@@ -62,8 +63,11 @@ export function Footer() {
       <span className="footer-tag">Thoughtfully finding home, one story at a time.</span>
       <div className="footer-links">
         <a href="https://instagram.com/" target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram size={17} /></a>
-        <a href="mailto:hello@thehousingstories.in">Contact</a>
-        <Link to="/admin">Admin</Link>
+        {/* <a href="mailto:thehousingstories@gmail.com">Contact</a> */}
+        <Link to="/privacy">Privacy</Link>
+        <Link to="/terms">Terms</Link>
+        <Link to="/refund-policy">Refunds</Link>
+        {/* <Link to="/admin">Admin</Link> */}
       </div>
       <small className="copyright">© {new Date().getFullYear()} The Housing Stories</small>
     </footer>
